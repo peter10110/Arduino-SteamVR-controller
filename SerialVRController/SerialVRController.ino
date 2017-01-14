@@ -8,13 +8,19 @@
 #define ANALOG_Y_PIN A7
 
 // Analog correction values
-#define ANALOG_DEAD 5
+#define ANALOG_DEAD 10
 #define ANALOG_X_CENTER 494
 #define ANALOG_X_MIN 0
 #define ANALOG_X_MAX 1023
-#define ANALOG_Y_CENTER 431
+#define ANALOG_Y_CENTER 437
 #define ANALOG_Y_MIN 0
 #define ANALOG_Y_MAX 700
+
+// Analog handling
+int x_pos_range = 0;
+int x_neg_range = 0;
+int y_pos_range = 0;
+int y_neg_range = 0; 
 
 // Current button states
 bool menuButtonDown = false;
@@ -49,6 +55,12 @@ void setup() {
 
   pinMode(TOUCHPAD_PRESS_PIN, INPUT);
   digitalWrite(TOUCHPAD_PRESS_PIN, HIGH);
+
+  // Calculate initial analog values
+  x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
+  x_neg_range = ANALOG_X_MIN - ANALOG_X_CENTER; // itt még nem jó valami
+  y_pos_range = ANALOG_Y_MAX - ANALOG_Y_CENTER;
+  y_neg_range = ANALOG_Y_MIN - ANALOG_Y_CENTER;
   
   Serial.begin(9600, SERIAL_8N1);
   Serial.print("#Program started");
@@ -144,6 +156,48 @@ void loop() {
   // Touchpad
   touchpadX = analogRead(ANALOG_X_PIN);
   touchpadY = analogRead(ANALOG_Y_PIN);
+  touchpadX -= ANALOG_X_CENTER;
+  touchpadY -= ANALOG_Y_CENTER;
+
+  // X axis
+  if ((touchpadX < ANALOG_DEAD && touchpadX > 0) || (touchpadX > -ANALOG_DEAD && touchpadX < 0))
+  {
+    // Dead zone
+    touchpadX = 0;
+  }
+  else
+  {
+      if (touchpadX >= 0)
+      {
+       // Positive range
+       touchpadX /= (float) -x_pos_range;
+      }
+      else
+      {
+       // Negative range
+       touchpadX /= (float) x_neg_range;
+      }
+  }
+
+  //Y axis
+  if ((touchpadY < ANALOG_DEAD && touchpadY > 0) || (touchpadY > -ANALOG_DEAD && touchpadY < 0))
+  {
+    // Dead zone
+    touchpadY = 0;
+  }
+  else
+  {
+      if (touchpadY >= 0)
+      {
+       // Positive range
+       touchpadY /= (float) y_pos_range;
+      }
+      else
+      {
+       // Negative range
+       touchpadY /= (float) -y_neg_range;
+      }
+  }
   
   // Write only, if the state has changed
   if (lastButtonStates != buttonStates || true)
