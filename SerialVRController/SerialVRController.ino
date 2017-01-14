@@ -14,7 +14,7 @@
 #define ANALOG_X_MAX 1023
 #define ANALOG_Y_CENTER 437
 #define ANALOG_Y_MIN 0
-#define ANALOG_Y_MAX 700
+#define ANALOG_Y_MAX 1000
 
 // Analog handling
 int x_pos_range = 0;
@@ -58,7 +58,7 @@ void setup() {
 
   // Calculate initial analog values
   x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
-  x_neg_range = ANALOG_X_MIN - ANALOG_X_CENTER; // itt még nem jó valami
+  x_neg_range = ANALOG_X_MIN - ANALOG_X_CENTER;
   y_pos_range = ANALOG_Y_MAX - ANALOG_Y_CENTER;
   y_neg_range = ANALOG_Y_MIN - ANALOG_Y_CENTER;
   
@@ -165,18 +165,22 @@ void loop() {
     // Dead zone
     touchpadX = 0;
   }
+  else if (touchpadX >= (ANALOG_X_MAX - ANALOG_X_CENTER))
+  {
+    touchpadX = 1;
+  }
   else
   {
-      if (touchpadX >= 0)
-      {
-       // Positive range
-       touchpadX /= (float) -x_pos_range;
-      }
-      else
-      {
-       // Negative range
-       touchpadX /= (float) x_neg_range;
-      }
+    if (touchpadX >= 0)
+    {
+     // Positive range
+     touchpadX /= (float) -x_pos_range;
+    }
+    else
+    {
+     // Negative range
+     touchpadX /= (float) x_neg_range;
+    }
   }
 
   //Y axis
@@ -185,18 +189,22 @@ void loop() {
     // Dead zone
     touchpadY = 0;
   }
+  else if (touchpadY >= (ANALOG_Y_MAX - ANALOG_Y_CENTER))
+  {
+    touchpadY = 1;
+  }
   else
   {
-      if (touchpadY >= 0)
-      {
-       // Positive range
-       touchpadY /= (float) y_pos_range;
-      }
-      else
-      {
-       // Negative range
-       touchpadY /= (float) -y_neg_range;
-      }
+    if (touchpadY >= 0)
+    {
+     // Positive range
+     touchpadY /= (float) y_pos_range;
+    }
+    else
+    {
+     // Negative range
+     touchpadY /= (float) -y_neg_range;
+    }
   }
   
   // Write only, if the state has changed
