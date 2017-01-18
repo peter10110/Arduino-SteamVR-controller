@@ -1,3 +1,39 @@
+#include <Wire.h>
+
+/* I2C addresses of Accelerometer/Gyro and Compass */
+#define I2CACCGYROADD 0x68 
+#define I2CCOMPADD 0x0C
+
+/* Accelerometer/Gyro register addresses */
+#define ACCEL_CONFIG 0x1C
+#define GYRO_CONFIG 0x1B
+#define ACCEL_XOUT_H 0x3B
+#define ACCEL_YOUT_H 0x3D
+#define ACCEL_ZOUT_H 0x3F
+#define TEMP_OUT_H 0x41
+#define GYRO_XOUT_H 0x43
+#define GYRO_YOUT_H 0x45
+#define GYRO_ZOUT_H 0x47
+#define PWR_MGMT_1 0x6B
+
+/*Compass register addresses */
+#define COMP_STATUS 0x02
+#define COMP_XOUT_L 0x03
+#define COMP_YOUT_L 0x05
+#define COMP_ZOUT_L 0x07
+
+/* Accelerometer range modes */
+#define ACCELRANGE_2g 0
+#define ACCELRANGE_4g 1
+#define ACCELRANGE_8g 2
+#define ACCELRANGE_16g 3
+
+/* Gyroscope sensitivity */
+#define GYRORANGE_250DPS 0
+#define GYRORANGE_500DPS 1
+#define GYRORANGE_1000DPS 2
+#define GYRORANGE_2000DPS 3
+
 // Button pinout
 #define MENU_BUTTON_PIN 9
 #define SYSTEM_BUTTON_PIN 7
@@ -6,6 +42,7 @@
 #define TOUCHPAD_PRESS_PIN 3 
 #define ANALOG_X_PIN A6
 #define ANALOG_Y_PIN A7
+#define POWER_BUTTON_PIN 10
 
 // Analog correction values
 #define ANALOG_DEAD 10
@@ -32,6 +69,7 @@ int buttonStates = 0;
 int lastButtonStates = 0;
 float touchpadX = 0;
 float touchpadY = 0;
+bool powerButtonDown = false;
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -56,13 +94,22 @@ void setup() {
   pinMode(TOUCHPAD_PRESS_PIN, INPUT);
   digitalWrite(TOUCHPAD_PRESS_PIN, HIGH);
 
+  pinMode(POWER_BUTTON_PIN, INPUT);
+  digitalWrite(POWER_BUTTON_PIN, HIGH);
+  
   // Calculate initial analog values
   x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
   x_neg_range = ANALOG_X_MIN - ANALOG_X_CENTER;
   y_pos_range = ANALOG_Y_MAX - ANALOG_Y_CENTER;
   y_neg_range = ANALOG_Y_MIN - ANALOG_Y_CENTER;
+
+  /* Initialise the I2C bus */
+  Wire.begin(); 
+
+    /* Initialise the accelerometer and gyro and put the I2C bus into pass-through mode*/
+  Initalise_AccelGyro(ACCELRANGE_8g, GYRORANGE_2000DPS);
   
-  Serial.begin(9600, SERIAL_8N1);
+  Serial.begin(115200, SERIAL_8N1); 
   Serial.print("#Program started");
 }
 
@@ -153,6 +200,22 @@ void loop() {
     buttonStates &= B10111;
   }
 
+  // Power button press
+  if (!powerButtonDown && digitalRead(POWER_BUTTON_PIN) == LOW)
+  {
+    // Power button pressed
+    powerButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    buttonStates |= 32;
+  }
+  else if (powerButtonDown && digitalRead(POWER_BUTTON_PIN) == HIGH)
+  {
+    // Power button released
+    digitalWrite(LED_BUILTIN, LOW);
+    powerButtonDown = false;
+    buttonStates &= B011111;
+  }
+
   // Touchpad
   touchpadX = analogRead(ANALOG_X_PIN);
   touchpadY = analogRead(ANALOG_Y_PIN);
@@ -206,19 +269,175 @@ void loop() {
      touchpadY /= (float) -y_neg_range;
     }
   }
+
+  /* Trigger a compass measurement */
+  Trigger_Compass();
+  SendDataOnSerial();
+  delay(5);
+}
+
+void SendDataOnSerial()
+{
+  Serial.print(buttonStates);
+  Serial.print(";");
+  Serial.print(touchpadX);
+  Serial.print(";");
+  Serial.print(touchpadY);
   
-  // Write only, if the state has changed
-  if (lastButtonStates != buttonStates || true)
+  /* Read the accelerometer X, Y, and Z axis and send it to the serial port */
+  Serial.print(";"); 
+  Serial.print(Read_Acc_Gyro(ACCEL_XOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(ACCEL_YOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(ACCEL_ZOUT_H));
+
+    /* Read the gyroscope X, Y, and Z axis and send it to the serial port */
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(GYRO_XOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(GYRO_YOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(GYRO_ZOUT_H));
+  
+  /* Read the compass X, Y, and Z axis and send it to the serial port */
+  Serial.print(";");
+  Serial.print(Read_Compass(COMP_XOUT_L));
+  Serial.print(";");
+  Serial.print(Read_Compass(COMP_YOUT_L));
+  Serial.print(";");
+  Serial.print(Read_Compass(COMP_ZOUT_L));
+  
+  Serial.print('|');
+}
+
+void SendReadableDataOnSerial()
+{
+  Serial.print(buttonStates);
+  Serial.print("; X:");
+  Serial.print(touchpadX);
+  Serial.print("; Y: ");
+  Serial.print(touchpadY);
+  
+  /* Read the accelerometer X, Y, and Z axis and send it to the serial port */
+  Serial.print("; Acc XYZ: "); 
+  Serial.print(Read_Acc_Gyro(ACCEL_XOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(ACCEL_YOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(ACCEL_ZOUT_H));
+
+    /* Read the gyroscope X, Y, and Z axis and send it to the serial port */
+  Serial.print("; Gyro XYZ: ");
+  Serial.print(Read_Acc_Gyro(GYRO_XOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(GYRO_YOUT_H));
+  Serial.print(";");
+  Serial.print(Read_Acc_Gyro(GYRO_ZOUT_H));
+  
+  /* Read the compass X, Y, and Z axis and send it to the serial port */
+  Serial.print("; Comp XYZ: ");
+  Serial.print(Read_Compass(COMP_XOUT_L));
+  Serial.print(";");
+  Serial.print(Read_Compass(COMP_YOUT_L));
+  Serial.print(";");
+  Serial.print(Read_Compass(COMP_ZOUT_L));
+  
+  Serial.print('\n');
+}
+
+/* Read one of the accelerometer or gyro axis registers */
+int Read_Acc_Gyro(byte axis)
+{
+  int Data;
+   
+  /* Select the required register */ 
+  Wire.beginTransmission(I2CACCGYROADD); 
+  Wire.write(axis); 
+  Wire.endTransmission(); 
+  
+  /* Request the high and low bytes for the required axis */
+  Wire.requestFrom(I2CACCGYROADD, 2);
+  Data = (int)Wire.read() << 8;
+  Data = Data | Wire.read();
+  Wire.endTransmission(); 
+  
+  return Data;
+}
+
+
+/* Initialises the accelerometer and gyro to one of the sensitivity 
+   ranges and puts the I2C bus into pass-through mode */
+void Initalise_AccelGyro(byte Accel_Range, byte Gyro_Range)
+{
+  /* Take the MPU9150 out of sleep */
+  Wire.beginTransmission(I2CACCGYROADD);
+  Wire.write(PWR_MGMT_1); 
+  Wire.write(0); 
+  Wire.endTransmission(); 
+  
+  /* Set the sensitivity of the module */
+  Wire.beginTransmission(I2CACCGYROADD);
+  Wire.write(ACCEL_CONFIG); 
+  Wire.write(Accel_Range << 3); 
+  Wire.endTransmission(); 
+  
+  /* Set the sensitivity of the module */
+  Wire.beginTransmission(I2CACCGYROADD);
+  Wire.write(GYRO_CONFIG); 
+  Wire.write(Gyro_Range << 3); 
+  Wire.endTransmission(); 
+  
+  /* Put the I2C bus into pass-through mode so that the aux I2C interface
+     that has the compass connected to it can be accessed */
+  Wire.beginTransmission(I2CACCGYROADD); 
+  Wire.write(0x6A); 
+  Wire.write(0x00); 
+  Wire.endTransmission(true);
+
+  Wire.beginTransmission(I2CACCGYROADD); 
+  Wire.write(0x37); 
+  Wire.write(0x02); 
+  Wire.endTransmission(true); 
+}
+
+/* Read one of the compass axis */
+int Read_Compass(byte axis)
+{
+  int Data;
+ 
+  /* Select the required axis register */
+  Wire.beginTransmission(I2CCOMPADD); 
+  Wire.write(axis); 
+  Wire.endTransmission(); 
+ 
+  /* Request the low and high bytes for the required axis */
+  Wire.requestFrom(I2CCOMPADD, 2);
+  Data = Wire.read();
+  Data = Data | (int)(Wire.read() << 8);
+  Wire.endTransmission(); 
+  
+  return Data;
+}
+
+
+/* Trigger a single shot compass reading of all three axis */
+void Trigger_Compass(void)
+{
+  
+  /* Trigger a measurement */
+  Wire.beginTransmission(I2CCOMPADD); 
+  Wire.write(0x0A); 
+  Wire.write(0x01); 
+  Wire.endTransmission(true);
+  
+  /* Wait for the measurement to complete */
+  do
   {
-    Serial.print(buttonStates);
-    Serial.print("; X:");
-    Serial.print(touchpadX);
-    Serial.print("; Y: ");
-    Serial.print(touchpadY);
-    Serial.print('\n');
-    lastButtonStates = buttonStates;  
-  }
-
-
-  delay(50);
+    Wire.beginTransmission(I2CCOMPADD); 
+    Wire.write(COMP_STATUS); 
+    Wire.endTransmission(); 
+ 
+    Wire.requestFrom(I2CCOMPADD, 1);
+  }while(!Wire.read()); 
 }
