@@ -51,7 +51,7 @@
 #define ANALOG_X_MAX 1023
 #define ANALOG_Y_CENTER 437
 #define ANALOG_Y_MIN 0
-#define ANALOG_Y_MAX 1000
+#define ANALOG_Y_MAX 500
 
 // Analog handling
 int x_pos_range = 0;
@@ -70,6 +70,7 @@ int lastButtonStates = 0;
 float touchpadX = 0;
 float touchpadY = 0;
 bool powerButtonDown = false;
+char handLetter = 'R';
 
 // the setup function runs once when you press reset or power the board
 void setup() {
@@ -278,6 +279,8 @@ void loop() {
 
 void SendDataOnSerial()
 {
+  Serial.print(handLetter);
+  Serial.print(";");
   Serial.print(buttonStates);
   Serial.print(";");
   Serial.print(touchpadX);
@@ -313,6 +316,8 @@ void SendDataOnSerial()
 
 void SendReadableDataOnSerial()
 {
+  Serial.print(handLetter);
+  Serial.print(";");
   Serial.print(buttonStates);
   Serial.print("; X:");
   Serial.print(touchpadX);
