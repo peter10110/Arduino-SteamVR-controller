@@ -11,4 +11,7 @@ void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy,
                             float deltat);
 const float * getQ();
 
+void customFilterUpdate(float w_x, float w_y, float w_z, float a_x, float a_y, float a_z);
+
+
 #endif // _QUATERNIONFILTERS_H_

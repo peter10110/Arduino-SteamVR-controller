@@ -27,8 +27,47 @@
 #include "quaternionFilters.h"
 #include "MPU9250.h"
 
+// Button pinout
+#define MENU_BUTTON_PIN 9
+#define SYSTEM_BUTTON_PIN 7
+#define GRIP_BUTTON_PIN 4
+#define TRIGGER_BUTTON_PIN 2
+#define TOUCHPAD_PRESS_PIN 3 
+#define ANALOG_X_PIN A6
+#define ANALOG_Y_PIN A7
+#define POWER_BUTTON_PIN 10
+
+// Analog correction values
+#define ANALOG_DEAD 10
+#define ANALOG_X_CENTER 494
+#define ANALOG_X_MIN 0
+#define ANALOG_X_MAX 1023
+#define ANALOG_Y_CENTER 437
+#define ANALOG_Y_MIN 0
+#define ANALOG_Y_MAX 500
+
+// Analog handling
+int x_pos_range = 0;
+int x_neg_range = 0;
+int y_pos_range = 0;
+int y_neg_range = 0; 
+
+// Current button states
+bool menuButtonDown = false;
+bool systemButtonDown = false;
+bool gripButtonDown = false;
+bool triggerButtonDown = false;
+bool touchpadDown = false;
+int buttonStates = 0;
+int lastButtonStates = 0;
+float touchpadX = 0;
+float touchpadY = 0;
+bool powerButtonDown = false;
+char handLetter = 'R';
+
+
 #define AHRS true         // Set to false for basic data read
-#define SerialDebug true  // Set to true to get Serial output for debugging
+#define SerialDebug false  // Set to true to get Serial output for debugging
 
 // Pin definitions
 int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
@@ -38,6 +77,36 @@ MPU9250 myIMU;
 
 void setup()
 {
+    // initialize digital pin LED_BUILTIN as an output.
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  pinMode(ANALOG_X_PIN, INPUT);
+  pinMode(ANALOG_Y_PIN, INPUT);
+  
+  pinMode(MENU_BUTTON_PIN, INPUT);
+  digitalWrite(MENU_BUTTON_PIN, HIGH);
+  
+  pinMode(SYSTEM_BUTTON_PIN, INPUT);
+  digitalWrite(SYSTEM_BUTTON_PIN, HIGH);
+  
+  pinMode(GRIP_BUTTON_PIN, INPUT);
+  digitalWrite(GRIP_BUTTON_PIN, HIGH);
+  
+  pinMode(TRIGGER_BUTTON_PIN, INPUT);
+  digitalWrite(TRIGGER_BUTTON_PIN, HIGH);
+
+  pinMode(TOUCHPAD_PRESS_PIN, INPUT);
+  digitalWrite(TOUCHPAD_PRESS_PIN, HIGH);
+
+  pinMode(POWER_BUTTON_PIN, INPUT);
+  digitalWrite(POWER_BUTTON_PIN, HIGH);
+  
+  // Calculate initial analog values
+  x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
+  x_neg_range = ANALOG_X_MIN - ANALOG_X_CENTER;
+  y_pos_range = ANALOG_Y_MAX - ANALOG_Y_CENTER;
+  y_neg_range = ANALOG_Y_MIN - ANALOG_Y_CENTER;
+  
   Wire.begin();
   // TWBR = 12;  // 400 kbit/sec I2C speed
   Serial.begin(38400);
@@ -323,4 +392,204 @@ void loop()
       myIMU.sum = 0;
     } // if (myIMU.delt_t > 500)
   } // if (AHRS)
+  ReadControllerData();
+  SendDataOnSerial();
 }
+
+void ReadControllerData()
+{ 
+  // Menu button
+  if (!menuButtonDown && digitalRead(MENU_BUTTON_PIN) == LOW)
+  {
+    // Menu button pressed
+    menuButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    //Serial.print("Menu button down");
+    buttonStates |= 4;
+  }
+  else if (menuButtonDown && digitalRead(MENU_BUTTON_PIN) == HIGH)
+  {
+    // Menu button released
+    digitalWrite(LED_BUILTIN, LOW);
+    menuButtonDown = false;
+    buttonStates &= B11011;
+  }
+
+  // System button
+  if (!systemButtonDown && digitalRead(SYSTEM_BUTTON_PIN) == LOW)
+  {
+    // System button pressed
+    systemButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    //Serial.print("System button down");
+    buttonStates |= 2;
+  }
+  else if (systemButtonDown && digitalRead(SYSTEM_BUTTON_PIN) == HIGH)
+  {
+    // System button released
+    digitalWrite(LED_BUILTIN, LOW);
+    systemButtonDown = false;
+    buttonStates &= B11101;
+  }
+
+  // Grip button
+  if (!gripButtonDown && digitalRead(GRIP_BUTTON_PIN) == LOW)
+  {
+    // Grip button pressed
+    gripButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    //Serial.print("Grip button down");
+    buttonStates |= 1;
+  }
+  else if (gripButtonDown && digitalRead(GRIP_BUTTON_PIN) == HIGH)
+  {
+    // Grip button released
+    digitalWrite(LED_BUILTIN, LOW);
+    gripButtonDown = false;
+    buttonStates &= B11110;
+  }
+
+  // Trigger button
+  if (!triggerButtonDown && digitalRead(TRIGGER_BUTTON_PIN) == LOW)
+  {
+    // Trigger button pressed
+    triggerButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    //Serial.print("Trigger button down");
+    buttonStates |= 16;
+  }
+  else if (triggerButtonDown && digitalRead(TRIGGER_BUTTON_PIN) == HIGH)
+  {
+    // Trigger button released
+    digitalWrite(LED_BUILTIN, LOW);
+    triggerButtonDown = false;
+    buttonStates &= B01111;
+  }
+
+  // Touchpad press
+  if (!touchpadDown && digitalRead(TOUCHPAD_PRESS_PIN) == LOW)
+  {
+    // Touchpad pressed
+    touchpadDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    //Serial.print("Touchpad press down");
+    buttonStates |= 8;
+  }
+  else if (touchpadDown && digitalRead(TOUCHPAD_PRESS_PIN) == HIGH)
+  {
+    // Touchpad released
+    digitalWrite(LED_BUILTIN, LOW);
+    touchpadDown = false;
+    buttonStates &= B10111;
+  }
+
+  // Power button press
+  if (!powerButtonDown && digitalRead(POWER_BUTTON_PIN) == LOW)
+  {
+    // Power button pressed
+    powerButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    buttonStates |= 32;
+  }
+  else if (powerButtonDown && digitalRead(POWER_BUTTON_PIN) == HIGH)
+  {
+    // Power button released
+    digitalWrite(LED_BUILTIN, LOW);
+    powerButtonDown = false;
+    buttonStates &= B011111;
+  }
+
+  // Touchpad
+  touchpadX = analogRead(ANALOG_X_PIN);
+  touchpadY = analogRead(ANALOG_Y_PIN);
+  touchpadX -= ANALOG_X_CENTER;
+  touchpadY -= ANALOG_Y_CENTER;
+
+  // X axis
+  if ((touchpadX < ANALOG_DEAD && touchpadX > 0) || (touchpadX > -ANALOG_DEAD && touchpadX < 0))
+  {
+    // Dead zone
+    touchpadX = 0;
+  }
+  else if (touchpadX >= (ANALOG_X_MAX - ANALOG_X_CENTER))
+  {
+    touchpadX = 1;
+  }
+  else
+  {
+    if (touchpadX >= 0)
+    {
+     // Positive range
+     touchpadX /= (float) -x_pos_range;
+    }
+    else
+    {
+     // Negative range
+     touchpadX /= (float) x_neg_range;
+    }
+  }
+
+  //Y axis
+  if ((touchpadY < ANALOG_DEAD && touchpadY > 0) || (touchpadY > -ANALOG_DEAD && touchpadY < 0))
+  {
+    // Dead zone
+    touchpadY = 0;
+  }
+  else if (touchpadY >= (ANALOG_Y_MAX - ANALOG_Y_CENTER))
+  {
+    touchpadY = 1;
+  }
+  else
+  {
+    if (touchpadY >= 0)
+    {
+     // Positive range
+     touchpadY /= (float) y_pos_range;
+    }
+    else
+    {
+     // Negative range
+     touchpadY /= (float) -y_neg_range;
+    }
+  }
+}
+
+void SendDataOnSerial()
+{
+  Serial.print(handLetter);
+  Serial.print(";");
+  Serial.print(buttonStates);
+  Serial.print(";");
+  Serial.print(touchpadX);
+  Serial.print(";");
+  Serial.print(touchpadY);
+  Serial.print(";");
+  Serial.print(*getQ());
+  Serial.print(";");
+  Serial.print(*(getQ() + 1));
+  Serial.print(";");
+  Serial.print(*(getQ() + 2));
+  Serial.print(";");
+  Serial.print(*(getQ() + 3));
+  
+  Serial.print('|');
+}
+
+void SendReadableDataOnSerial()
+{
+  Serial.print(handLetter);
+  Serial.print(";");
+  Serial.print(buttonStates);
+  Serial.print("; X:");
+  Serial.print(touchpadX);
+  Serial.print("; Y: ");
+  Serial.print(touchpadY);
+
+  Serial.print("; q0 = ");  Serial.print(*getQ());
+  Serial.print(" qx = "); Serial.print(*(getQ() + 1));
+  Serial.print(" qy = "); Serial.print(*(getQ() + 2));
+  Serial.print(" qz = "); Serial.print(*(getQ() + 3));
+  
+  Serial.print('\n');
+}
+
