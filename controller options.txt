@@ -1,0 +1,5 @@
+	bool useUdp = settings->GetBool("combinedLeap", "useUdpController", true);
+	bool useSerial = settings->GetBool("combinedLeap", "useSerialController", true);
+	useDeviceRotation = settings->GetBool("combinedLeap", "useDeviceRotation", true);
+	useLeftHandOrientation = settings->GetBool("combinedLeap", "useLeftController", false);
+	useRightHandController = settings->GetBool("combinedLeap", "useRightController", true);

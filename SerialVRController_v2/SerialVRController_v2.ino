@@ -170,7 +170,7 @@ void SendDataOnSerial()
   Serial.print(";");
   Serial.print(mympu.quat.z, 4);
   
-  Serial.println('|');
+  Serial.print('|');
 }
 
 void ReadControllerData()
