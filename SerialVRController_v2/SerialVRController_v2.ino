@@ -1,3 +1,5 @@
+//#define LEFT
+
 #include "freeram.h"
 
 #include "mpu.h"
@@ -11,19 +13,44 @@
 #define SYSTEM_BUTTON_PIN 7
 #define GRIP_BUTTON_PIN 4
 #define TRIGGER_BUTTON_PIN 2
-#define TOUCHPAD_PRESS_PIN 3 
-#define ANALOG_X_PIN A6
-#define ANALOG_Y_PIN A7
-#define POWER_BUTTON_PIN 10
+#define TOUCHPAD_PRESS_PIN 3
+// Make the controller layouts mirrored
+#ifdef LEFT 
+  #define POWER_BUTTON_PIN 5
+  #define AT_BUTTON_PIN 10
+#else
+  #define POWER_BUTTON_PIN 10
+  #define AT_BUTTON_PIN 5
+#endif
 
-// Analog correction values
-#define ANALOG_DEAD 10
-#define ANALOG_X_CENTER 494
-#define ANALOG_X_MIN 0
-#define ANALOG_X_MAX 1023
-#define ANALOG_Y_CENTER 437
-#define ANALOG_Y_MIN 0
-#define ANALOG_Y_MAX 500
+#ifdef LEFT
+  // The analog sticks are swapped on the left controller by mistake.
+  #define ANALOG_X_PIN A7
+  #define ANALOG_Y_PIN A6
+#else
+  #define ANALOG_X_PIN A6
+  #define ANALOG_Y_PIN A7
+#endif
+
+#ifdef LEFT
+  // Analog correction values for L controller
+  #define ANALOG_DEAD 10
+  #define ANALOG_X_CENTER 522
+  #define ANALOG_X_MIN 0
+  #define ANALOG_X_MAX 960
+  #define ANALOG_Y_CENTER 514
+  #define ANALOG_Y_MIN 50
+  #define ANALOG_Y_MAX 1000
+#else
+  // Analog correction values for R controller
+  #define ANALOG_DEAD 10
+  #define ANALOG_X_CENTER 494
+  #define ANALOG_X_MIN 0
+  #define ANALOG_X_MAX 1023
+  #define ANALOG_Y_CENTER 437
+  #define ANALOG_Y_MIN 0
+  #define ANALOG_Y_MAX 500
+#endif
 
 // Analog handling
 int x_pos_range = 0;
@@ -37,12 +64,18 @@ bool systemButtonDown = false;
 bool gripButtonDown = false;
 bool triggerButtonDown = false;
 bool touchpadDown = false;
+bool atButtonDown = false;
 int buttonStates = 0;
 int lastButtonStates = 0;
 float touchpadX = 0;
 float touchpadY = 0;
 bool powerButtonDown = false;
-char handLetter = 'R';
+
+#ifdef LEFT
+  char handLetter = 'L';
+#else
+  char handLetter = 'R';
+#endif
 
 #define ReadableSerial false
 
@@ -71,6 +104,9 @@ void setup() {
 
   pinMode(POWER_BUTTON_PIN, INPUT);
   digitalWrite(POWER_BUTTON_PIN, HIGH);
+
+  pinMode(AT_BUTTON_PIN, INPUT);
+  digitalWrite(AT_BUTTON_PIN, HIGH);
   
   // Calculate initial analog values
   x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
@@ -109,19 +145,7 @@ void loop() {
 
     ReadControllerData();
     SendDataOnSerial();
-    /*if (!(c%25)) {
-	    Serial.print(np); Serial.print("  "); Serial.print(err_c); Serial.print(" "); Serial.print(err_o);
-	    Serial.print(" Y: "); Serial.print(mympu.ypr[0]);
-	    Serial.print(" P: "); Serial.print(mympu.ypr[1]);
-	    Serial.print(" R: "); Serial.print(mympu.ypr[2]);
-	    Serial.print("\tgy: "); Serial.print(mympu.gyro[0]);
-	    Serial.print(" gp: "); Serial.print(mympu.gyro[1]);
-	    Serial.print(" gr: "); Serial.println(mympu.gyro[2]);
-      Serial.print("\tqw: "); Serial.print(mympu.quat.w);
-      Serial.print(" qx: "); Serial.print(mympu.quat.x); 
-      Serial.print(" qy: "); Serial.print(mympu.quat.y);
-      Serial.print(" qz: "); Serial.println(mympu.quat.z);
-    }*/
+    //PrintAnalogValues();
 }
 
 void SendSensorDataProcessing() {    
@@ -149,7 +173,17 @@ void SendSensorDataProcessing() {
   Serial.print(mympu.ypr[2],8);
   
   
-  Serial.println('|');
+  Serial.print('|');
+}
+
+void PrintAnalogValues()
+{
+  float an_x = analogRead(ANALOG_X_PIN);
+  float an_y = analogRead(ANALOG_Y_PIN);
+  Serial.print("X: ");
+  Serial.print(an_x);
+  Serial.print(" Y: ");
+  Serial.println(an_y);
 }
 
 void SendDataOnSerial()
@@ -276,6 +310,22 @@ void ReadControllerData()
     buttonStates &= B011111;
   }
 
+  // At (@) button press
+  if (!atButtonDown && digitalRead(AT_BUTTON_PIN) == LOW)
+  {
+    // At button pressed
+    atButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    buttonStates |= 64;
+  }
+  else if (atButtonDown && digitalRead(AT_BUTTON_PIN) == HIGH)
+  {
+    // At button released
+    digitalWrite(LED_BUILTIN, LOW);
+    atButtonDown = false;
+    buttonStates &= B0111111;
+  }
+
   // Touchpad
   touchpadX = analogRead(ANALOG_X_PIN);
   touchpadY = analogRead(ANALOG_Y_PIN);
@@ -288,7 +338,11 @@ void ReadControllerData()
     // Dead zone
     touchpadX = 0;
   }
-  else if (touchpadX >= (ANALOG_X_MAX - ANALOG_X_CENTER))
+  else if (touchpadX >= x_pos_range)
+  {
+    touchpadX = -1;
+  }
+  else if (touchpadX <= x_neg_range)
   {
     touchpadX = 1;
   }
@@ -312,9 +366,13 @@ void ReadControllerData()
     // Dead zone
     touchpadY = 0;
   }
-  else if (touchpadY >= (ANALOG_Y_MAX - ANALOG_Y_CENTER))
+  else if (touchpadY >= y_pos_range)
   {
     touchpadY = 1;
+  }
+  else if (touchpadY <= y_neg_range)
+  {
+    touchpadY = -1;
   }
   else
   {

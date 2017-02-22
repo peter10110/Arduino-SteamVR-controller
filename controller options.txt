@@ -3,3 +3,5 @@
 	useDeviceRotation = settings->GetBool("combinedLeap", "useDeviceRotation", true);
 	useLeftHandOrientation = settings->GetBool("combinedLeap", "useLeftController", false);
 	useRightHandController = settings->GetBool("combinedLeap", "useRightController", true);
+	
+	"comPort1" : "\\\\.\\COM12",
