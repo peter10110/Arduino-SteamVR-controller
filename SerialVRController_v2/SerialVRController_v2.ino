@@ -1,4 +1,4 @@
-//#define LEFT
+#define LEFT
 
 #include "freeram.h"
 
@@ -18,9 +18,11 @@
 #ifdef LEFT 
   #define POWER_BUTTON_PIN 5
   #define AT_BUTTON_PIN 10
+  #define B_BUTTON_PIN 6
 #else
   #define POWER_BUTTON_PIN 10
   #define AT_BUTTON_PIN 5
+  #define B_BUTTON_PIN 8
 #endif
 
 #ifdef LEFT
@@ -70,6 +72,7 @@ int lastButtonStates = 0;
 float touchpadX = 0;
 float touchpadY = 0;
 bool powerButtonDown = false;
+bool bButtonDown = false;
 
 #ifdef LEFT
   char handLetter = 'L';
@@ -107,6 +110,9 @@ void setup() {
 
   pinMode(AT_BUTTON_PIN, INPUT);
   digitalWrite(AT_BUTTON_PIN, HIGH);
+
+  pinMode(B_BUTTON_PIN, INPUT);
+  digitalWrite(B_BUTTON_PIN, HIGH);
   
   // Calculate initial analog values
   x_pos_range = ANALOG_X_MAX - ANALOG_X_CENTER;
@@ -324,6 +330,22 @@ void ReadControllerData()
     digitalWrite(LED_BUILTIN, LOW);
     atButtonDown = false;
     buttonStates &= B0111111;
+  }
+
+  // B button press
+  if (!bButtonDown && digitalRead(B_BUTTON_PIN) == LOW)
+  {
+    // B button pressed
+    bButtonDown = true;
+    digitalWrite(LED_BUILTIN, HIGH);
+    buttonStates |= 128;
+  }
+  else if (bButtonDown && digitalRead(B_BUTTON_PIN) == HIGH)
+  {
+    // B button released
+    digitalWrite(LED_BUILTIN, LOW);
+    bButtonDown = false;
+    buttonStates &= B01111111;
   }
 
   // Touchpad
